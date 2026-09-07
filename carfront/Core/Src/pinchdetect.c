@@ -10,7 +10,7 @@
 #define INA226_RSHUNT_OHM               0.1f
 
 /* 1로 바꾸면 끼임 판단만 하고 실제 정지는 하지 않는 측정 전용 모드 */
-#define PINCH_MEASURE_ONLY_MODE         1U
+#define PINCH_MEASURE_ONLY_MODE         0U
 
 typedef struct
 {
