@@ -37,13 +37,11 @@ Raspberry Pi 5 기반 **Central Supervisor**와 STM32 기반 분산 ECU (**Drive
 
 ### 전체 시스템
 
-`Raspberry Pi 5` · `STM32F103/F439/F446` · `CAN 500 kbps` · `DBC`  
-`Python` · `QML` · `PySide6` · `FreeRTOS`
+`Raspberry Pi 5` · `STM32F103/F439/F446` · `CAN 500 kbps` · `DBC` · `Python` · `QML` · `PySide6` · `FreeRTOS`
 
 ### 담당 개발
 
-`STM32F103` · `C` · `STM32CubeIDE` · `STM32 HAL`  
-`CAN Bus` · `I2C` · `INA226` · `PWM` · `Servo Motor` · `Step Motor`
+`STM32F103` · `C` · `STM32CubeIDE` · `STM32 HAL` · `CAN Bus` · `I2C` · `INA226` · `PWM` · `Servo Motor` · `Step Motor`
 
 ---
 
@@ -76,31 +74,9 @@ Raspberry Pi 5 기반 **Central Supervisor**와 STM32 기반 분산 ECU (**Drive
 <!-- 추천 파일명: assets/front_ecu_architecture.png -->
 <!-- ================================ -->
 
-![Front Zone ECU Architecture](./assets/front_ecu_architecture.png)
-
-### Control Flow
-
-```text
-CAN Seat Command
-       ↓
-CAN RX / Command Queue
-       ↓
-Command Validation
-       ↓
-Seat Control
- ┌─────┴─────┐
- ▼           ▼
-Servo       Step Motor
-Recline     Rotation
- │           │
- └─────┬─────┘
-       ▼
-INA226 Current Monitoring
-       ↓
-Pinch Detection / Recovery FSM
-       ↓
-Seat Status CAN TX
-```
+<p align="center">
+  <img src="./assets/frontecu_architecture.png" width="600" height="500">
+</p>
 
 ---
 
@@ -246,39 +222,15 @@ Pinch Event가 발생하도록 구성했습니다.
 <!-- 추천 파일명: assets/pinch_fsm.png -->
 <!-- ============================== -->
 
-![Pinch Recovery FSM](./assets/pinch_fsm.png)
+<p align="center">
+  <img src="./assets/anti_pinch_FSM.png" width="600" height="500">
+</p>
 
-```text
-        Seat Command
-             ↓
-          MOVING
-             │
-           Pinch
-             ↓
-          BACKOFF
-             ↓
-        WAIT_RETRY
-          (1 sec)
-             ↓
-     RETRY_TO_TARGET
-          /       \
-       Success   Pinch
-         │         │
-        IDLE     LOCKED
-```
 
 FSM 상태는 다음과 같이 구성했습니다.
 
 ```text
-MOVING
-  ↓
-BACKOFF
-  ↓
-WAIT_RETRY
-  ↓
-RETRY_TO_TARGET
-  ↓
-IDLE / LOCKED
+MOVING -> BACKOFF -> WAIT_RETRY -> RETRY_TO_TARGET -> IDLE / LOCKED
 ```
 
 ### Recovery Logic
@@ -296,6 +248,8 @@ IDLE / LOCKED
 `PinchDetect_Suspend()`
 
 기능을 적용하여 회피 동작 중 Pinch Detection을 일시적으로 유예했습니다.
+
+![SafeAbort Test](./assets/끼임감지.gif)
 
 ---
 
@@ -334,7 +288,7 @@ Supervisor / Monitor에서 전송한
 <!-- 추천 파일명: assets/safe_abort_test.gif -->
 <!-- ================================= -->
 
-![SafeAbort Test](./assets/safe_abort_test.gif)
+
 
 ---
 
