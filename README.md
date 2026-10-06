@@ -265,10 +265,7 @@ Control FSM Reset
 
 ### 5. Sensorless Step Motor 제어의 한계 및 개선 방향
 
-- **현재 구조의 한계점** : Front Seat Rotation Step Motor는 Encoder 또는 Absolute Position Sensor 없이  
-명령한 Step Count를 Software에서 누적하여 현재 위치를 관리.
-
- 따라서 다음과 같은 구조적 한계가 있습니다.
+- **현재 구조의 한계점** : Front Seat Rotation Step Motor는 Encoder 또는 Absolute Position Sensor 없이 명령한 Step Count를 Software에서 누적하여 현재 위치를 관리함에 따라 다음과 같은 구조적 한계 존재.
 
 1. 전원 재부팅 시 실제 절대 위치 확인 불가
 2. 외부 하중에 의한 Step-out 발생 시 Software 위치와 실제 위치 차이 발생 가능
