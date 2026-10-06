@@ -1,5 +1,5 @@
 # 🚗 CAN 기반 PBV Cabin 분산 제어 시스템
-> **최종 프로젝트 경진대회 대상**
+> **Intel Edge AI SW 아카데미 프로젝트 경진대회 대상**
 
 - **개발 기간**: 2026.06.17 ~ 2026.07.09
 - **개발 인원**: 5명
@@ -16,7 +16,7 @@ Raspberry Pi 5 기반 **Central Supervisor**와 STM32 기반 분산 ECU (**Drive
 
 ### Front Zone ECU 역할
 
-상위 Supervisor의 좌석 제어 명령을 수신하여 앞좌석(운전석/조수석)의 **Recline 및 Rotation 제어**를 수행하고 INA226 전류 센서를 이용한 실시간 전류 측정을 기반으로 **끼임 방지 안전 로직**과 **비상 정지 기능**을 수행하도록 구현.
+상위 Supervisor의 좌석 제어 명령을 수신하여 앞좌석(운전석/조수석)의 **Recline 및 Rotation 제어**를 수행하고 실시간 전류 측정을 통한 **끼임 방지 안전 로직** 및 **비상 정지 기능**을 수행하도록 구현.
 
 ---
 
@@ -86,11 +86,8 @@ Raspberry Pi 5 기반 **Central Supervisor**와 STM32 기반 분산 ECU (**Drive
 
 ### CAN Interrupt 분리
 
-CAN RX Interrupt에서는 수신된 Frame을 Decode하고  
-Command Queue에 저장하는 최소한의 작업만 수행하도록 구성했습니다.
-
-실제 좌석 구동이나 복잡한 안전 판단을 ISR 내부에서 수행하지 않아  
-Interrupt 처리 시간이 길어지는 것을 방지했습니다.
+- CAN RX Interrupt에서는 수신된 Frame을 Decode하고 Command Queue에 저장하는 최소한의 작업만 수행하도록 구성.
+- 실제 좌석 구동이나 복잡한 안전 판단을 ISR 내부에서 수행하지 않아 Interrupt 처리 시간이 길어지는 것을 방지.
 
 ```text
 CAN RX Interrupt
@@ -104,20 +101,8 @@ ISR Return
 
 ### Main Loop 독립 처리
 
-실제 좌석 명령 검증과 액추에이터 제어는 메인 루프의
-
-`FrontSeatApp_Process()`
-
-에서 수행하도록 분리했습니다.
-
-이를 통해 Servo 및 Step Motor가 동작하는 동안에도
-
-- CAN 메시지 처리
-- Pinch Detection
-- SafeAbort 처리
-- Status 송신
-
-등의 기능을 지속적으로 수행할 수 있도록 구성했습니다.
+- 실제 좌석 명령 검증 및 액추에이터 제어는 메인 루프의 `FrontSeatApp_Process()` 에서 비동기 처리.
+- Servo 및 Step Motor 구동 중에도 안전 로직 및 CAN 수신 기능(CAN 메시지 처리, Pinch Detection, SafeAbort 처리, Status 송신)이 끊김 없이 동작.
 
 ```text
 while (1)
@@ -132,11 +117,8 @@ while (1)
 
 ### Servo Motor - `Servo_Process()`
 
-목표 PWM 값을 한 번에 적용하지 않고  
-**10 ms 주기로 PWM Pulse Width를 단계적으로 변경**하도록 구현했습니다.
-
-이를 통해 목표각 변경 시 발생하는 급격한 서보 동작을 완화하면서도  
-모터 동작 중 다른 Application Logic이 계속 실행될 수 있도록 했습니다.
+- 목표 PWM 값을 한 번에 변경하지 않고 **10 ms 주기로 PWM Pulse Width를 단계적으로 변경**하여 부드러운 가감속 모션 구현.
+- Non-blocking 제어로 모터 동작 중 다른 Application Logic이 계속 실행.
 
 ```text
 Target Angle 설정
@@ -150,33 +132,21 @@ Target Angle 도달
 
 ### Step Motor - `Step_Process()`
 
-절대 위치 센서가 없는 Step Motor 특성을 고려하여
+- 절대 위치 센서가 없는 Step Motor 특성을 고려하여 부팅 시 Software 기준 위치 설정.
+- Rotation Angle ↔ Step Count 변환을 통해 구동한 Step 수를 Software에서 누적하여 좌석 Rotation 상태를 관리.
+- Non-blocking 방식으로 `Step_Process()` 호출마다 필요한 Step을 순차적으로 수행.
 
-- 부팅 시 Software 기준 위치 설정
-- Rotation Angle ↔ Step Count 변환
-- 구동한 Step 수를 Software에서 누적
-
-하는 방식으로 좌석 Rotation 상태를 관리했습니다.
-
-Blocking 방식으로 목표 위치까지 한 번에 구동하지 않고  
-`Step_Process()` 호출마다 필요한 Step을 순차적으로 수행하도록 구현했습니다.
-
-> ⚠️ 실제 Encoder Feedback 기반의 위치 측정이 아닌  
-> **Open-loop Step Count 기반 Software Position 관리 방식**입니다.
+> ⚠️ 실제 Encoder Feedback 기반의 위치 측정이 아닌 **Open-loop Step Count 기반 Software Position 관리 방식**입니다.
 
 ---
 
-## 3. 이중 과전류 기반 Anti-Pinch Detection
+## 3. 이중 과전류 기반 끼임 감지
 
-INA226 전류 센서를 이용하여 Recline Servo의 부하 전류를 주기적으로 측정하고,  
-정상 구동과 끼임 상태를 구분하도록 구현했습니다.
+INA226 전류 센서를 이용하여 Recline Servo의 부하 전류를 주기적으로 측정하고,  정상 구동과 끼임 상태를 구분하도록 구현.
 
-### Inrush Current 예외 처리
+### 기동 전류 예외 처리
 
-모터 구동 직후에는 정상 상태에서도 순간적으로 높은 기동 전류가 발생합니다.
-
-따라서 `PINCH_START_IGNORE_MS` 동안은 끼임 판단을 유예하여  
-기동 전류에 의한 False Detection을 방지했습니다.
+- 모터 구동 직후 순간적으로 발생하는 높은 기동 전류 구간(`PINCH_START_IGNORE_MS`) 동안은 끼임 판단을 유예하여 False Detection을 방지.
 
 ```text
 Motor Start
@@ -186,36 +156,21 @@ Inrush Ignore Time
 Pinch Detection 활성화
 ```
 
-### Soft / Hard Threshold
+### 이중 과전류 판정 (Soft / Hard Threshold)
 
-하나의 임계값만 사용하는 대신 두 가지 판정 조건을 사용했습니다.
-
-#### Hard Condition
-
-순간적으로 매우 높은 전류가 연속적으로 발생하는 경우  
-급격한 부하 또는 끼임으로 판단합니다.
-
-#### Soft Condition
-
-상대적으로 낮지만 지속적으로 증가한 부하를 검출하기 위해  
-좌석별 튜닝 조건에 따라 **순간값 또는 Moving Average**를 이용합니다.
+- Hard Condition : 순간적으로 매우 높은 전류가 연속적으로 발생하는 경우 급격한 부하 또는 끼임으로 판단.
+- Soft Condition : 상대적으로 낮지만 지속적으로 증가한 부하를 검출하기 위해 **Moving Average**를 이용.
 
 ### Consecutive Counter
 
-일시적인 전류 Peak나 Noise만으로 끼임이 판단되지 않도록
-
-- `soft_count`
-- `hard_count`
-
-를 이용하여 **일정 횟수 이상 연속으로 임계값을 초과한 경우에만**  
-Pinch Event가 발생하도록 구성했습니다.
+- 연속된 과전류 감지 횟수 (`soft_count`, `hard_count`) 를 이용하여 **일정 횟수 이상 연속으로 임계값을 초과한 경우에만** Pinch Event 발생.
+- 일시적인 전류 Peak나 Noise만으로 발생하는 끼임 오진단 방지.
 
 ---
 
-## 4. FSM 기반 Pinch Recovery
+## 4. FSM 기반 회피 동작
 
-끼임 발생 시 단순 정지에서 끝나는 것이 아니라  
-압력을 해제하고 안전하게 복구하기 위한 상태 기반 제어를 구현했습니다.
+끼임 발생 시 단순 정지에서 끝나는 것이 아니라 압력을 해제하고 안전하게 복구하기 위한 상태 기반 제어를 구현.
 
 <!-- ============================== -->
 <!-- 이미지 3: Pinch Recovery FSM -->
@@ -226,12 +181,8 @@ Pinch Event가 발생하도록 구성했습니다.
   <img src="./assets/anti_pinch_FSM.png" width="600" height="500">
 </p>
 
+> FSM 상태도
 
-FSM 상태는 다음과 같이 구성했습니다.
-
-```text
-MOVING -> BACKOFF -> WAIT_RETRY -> RETRY_TO_TARGET -> IDLE / LOCKED
-```
 
 ### Recovery Logic
 
@@ -242,12 +193,7 @@ MOVING -> BACKOFF -> WAIT_RETRY -> RETRY_TO_TARGET -> IDLE / LOCKED
 5. 기존 Target Position으로 1회 재시도
 6. 재끼임 발생 시 `LOCKED` 상태로 전환
 
-또한 Backoff 동작 중 발생하는 역방향 구동 전류가  
-다시 끼임으로 판정되는 것을 막기 위해
-
-`PinchDetect_Suspend()`
-
-기능을 적용하여 회피 동작 중 Pinch Detection을 일시적으로 유예했습니다.
+- Backoff 동작 중 발생하는 역방향 구동 전류에 의해 다시 끼임으로 판정되는 것을 막기 위해 회피 동작 중 일시적으로 감지 유예 기능(`PinchDetect_Suspend`)을 적용.
 
 ![SafeAbort Test](./assets/끼임감지.gif)
 
@@ -255,8 +201,8 @@ MOVING -> BACKOFF -> WAIT_RETRY -> RETRY_TO_TARGET -> IDLE / LOCKED
 
 ## 5. SafeAbort 기반 비상정지
 
-시스템 비상 상황에서 일반 좌석 명령보다  
-**SafeAbort 메시지를 우선 처리**하도록 구현했습니다.
+- 시스템 비상 상황에서 일반 좌석 명령보다 **SafeAbort 메시지를 우선 처리**하도록 구현.
+- Supervisor / Monitor에서 전송한 `SafeAbort (0x010)` 메시지를 수신하면 Servo 즉시 정지, Step Motor 즉시 정지, 진행 중인 Seat Control FSM 초기화, SafeAbort 상태 동안 신규 Seat Command 무시 상태로 전환.
 
 ```text
 SafeAbort (CAN ID 0x010)
@@ -270,18 +216,6 @@ Control FSM Reset
 일반 Seat Command 차단
 ```
 
-Supervisor / Monitor에서 전송한
-
-`SafeAbort (0x010)`
-
-메시지를 수신하면
-
-- Servo 즉시 정지
-- Step Motor 즉시 정지
-- 진행 중인 Seat Control FSM 초기화
-- SafeAbort 상태 동안 신규 Seat Command 무시
-
-하도록 구현했습니다.
 
 <!-- ================================= -->
 <!-- 이미지 4: SafeAbort 테스트 사진/영상 GIF -->
